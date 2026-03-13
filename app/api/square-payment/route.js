@@ -14,26 +14,31 @@ export async function POST(request) {
       buyerEmailAddress,
     } = body;
 
-    if (!sourceId || !amount) {
+    if (!sourceId) {
       return Response.json(
-        { ok: false, error: "Missing sourceId or amount" },
+        { ok: false, error: "Missing sourceId" },
         { status: 400 }
       );
     }
 
-    const paymentsApi = squareClient.paymentsApi;
+    if (!amount || Number(amount) <= 0) {
+      return Response.json(
+        { ok: false, error: "Missing or invalid amount" },
+        { status: 400 }
+      );
+    }
 
-    const result = await paymentsApi.createPayment({
+    const result = await squareClient.payments.create({
       sourceId,
       idempotencyKey: randomUUID(),
-      amountMoney: {
-        amount: BigInt(amount), // amount in cents
-        currency,
-      },
       orderId,
       note,
       buyerEmailAddress,
       autocomplete: true,
+      amountMoney: {
+        amount: BigInt(amount), // cents
+        currency,
+      },
     });
 
     return Response.json({
@@ -41,6 +46,8 @@ export async function POST(request) {
       payment: result.payment,
     });
   } catch (error) {
+    console.error("Square payment error:", error);
+
     return Response.json(
       {
         ok: false,
