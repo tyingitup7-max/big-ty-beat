@@ -210,6 +210,72 @@ function SectionTitle({ eyebrow, title, text }) {
   );
 }
 
+function formatTime(seconds) {
+  if (!Number.isFinite(seconds)) return "0:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${mins}:${secs}`;
+}
+
+function StickyPlayer({ activeBeat, isPlaying, currentTime, duration, onTogglePlay, onClose, onSeek }) {
+  if (!activeBeat) return null;
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  return (
+    <div style={styles.playerBarWrap}>
+      <div style={styles.playerBar}>
+        <div style={styles.playerMeta}>
+          <div style={styles.playerArtWrap}>
+            <img
+              src={activeBeat.image}
+              alt={activeBeat.title}
+              style={styles.playerArt}
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
+          </div>
+          <div>
+            <div style={styles.playerLabel}>Now Playing</div>
+            <div style={styles.playerTitle}>{activeBeat.title}</div>
+            <div style={styles.playerSubtitle}>{activeBeat.subtitle}</div>
+          </div>
+        </div>
+
+        <div style={styles.playerCenter}>
+          <div style={styles.playerControls}>
+            <button style={styles.playerMainButton} onClick={() => onTogglePlay(activeBeat)}>
+              {isPlaying ? "❚❚" : "▶"}
+            </button>
+            <div style={styles.playerTime}>{formatTime(currentTime)} / {formatTime(duration)}</div>
+          </div>
+
+          <div style={styles.playerProgressRow}>
+            <input
+              type="range"
+              min="0"
+              max={duration || 0}
+              step="0.1"
+              value={Math.min(currentTime, duration || 0)}
+              onChange={(e) => onSeek(Number(e.target.value))}
+              style={{ ...styles.playerRange, background: `linear-gradient(to right, #ef4444 0%, #f97316 ${progress}%, #27272a ${progress}%, #27272a 100%)` }}
+            />
+          </div>
+        </div>
+
+        <div style={styles.playerRight}>
+          <div style={styles.playerBadge}>{activeBeat.bpm} BPM</div>
+          <div style={styles.playerBadge}>{activeBeat.key}</div>
+          <button style={styles.playerCloseButton} onClick={onClose}>✕</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Page() {
   const [search, setSearch] = useState("");
   const [mood, setMood] = useState("All");
@@ -218,6 +284,8 @@ export default function Page() {
   const [heroImageError, setHeroImageError] = useState(false);
   const [aboutImageError, setAboutImageError] = useState(false);
   const [imageErrorMap, setImageErrorMap] = useState({});
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const audioRef = useRef(null);
 
   useEffect(() => {
@@ -239,6 +307,8 @@ export default function Page() {
   }, [search, mood]);
 
   const painBeats = beats.filter((beat) => beat.mood === "Pain");
+  const activeBeat = beats.find((beat) => beat.id === activeBeatId) || null;
+  const isPlaying = !!audioRef.current && !audioRef.current.paused && activeBeatId !== null;
   const victoryBeats = beats.filter((beat) => beat.mood === "Victory");
   const exclusiveBeats = beats.filter((beat) => beat.exclusive).slice(0, 3);
 
@@ -248,11 +318,18 @@ export default function Page() {
 
   function handleTogglePlay(beat) {
     if (activeBeatId === beat.id && audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current = null;
-      setActiveBeatId(null);
-      setNowPlayingTitle("");
+      if (audioRef.current.paused) {
+        audioRef.current
+          .play()
+          .then(() => {
+            setNowPlayingTitle(`${beat.title} — ${beat.subtitle}`);
+          })
+          .catch(() => {
+            alert(`Unable to play preview: ${beat.preview}`);
+          });
+      } else {
+        audioRef.current.pause();
+      }
       return;
     }
 
@@ -265,18 +342,51 @@ export default function Page() {
     audioRef.current = audio;
     setActiveBeatId(beat.id);
     setNowPlayingTitle(`${beat.title} — ${beat.subtitle}`);
+    setCurrentTime(0);
+    setDuration(0);
+
+    audio.addEventListener("loadedmetadata", () => {
+      setDuration(audio.duration || 0);
+    });
+
+    audio.addEventListener("timeupdate", () => {
+      setCurrentTime(audio.currentTime || 0);
+      setDuration(audio.duration || 0);
+    });
 
     audio.play().catch(() => {
       alert(`Add this preview file to public/audio: ${beat.preview}`);
       setActiveBeatId(null);
       setNowPlayingTitle("");
+      setCurrentTime(0);
+      setDuration(0);
     });
 
     audio.onended = () => {
       setActiveBeatId(null);
       setNowPlayingTitle("");
+      setCurrentTime(0);
+      setDuration(0);
       audioRef.current = null;
     };
+  }
+
+  function handleClosePlayer() {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setActiveBeatId(null);
+    setNowPlayingTitle("");
+    setCurrentTime(0);
+    setDuration(0);
+  }
+
+  function handleSeek(value) {
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = value;
+    setCurrentTime(value);
   }
 
   return (
@@ -316,8 +426,11 @@ export default function Page() {
             </div>
 
             <div style={styles.nowPlayingBox}>
-              <div style={styles.smallMuted}>Now Playing</div>
-              <div style={styles.nowPlayingTitle}>{nowPlayingTitle || "No beat playing"}</div>
+              <div style={styles.smallMuted}>Preview Status</div>
+              <div style={styles.nowPlayingTitle}>{nowPlayingTitle || "No beat selected"}</div>
+              <div style={{ ...styles.smallMuted, marginTop: 6 }}>
+                {activeBeat ? (isPlaying ? "Playing now" : "Paused") : "Select any beat card to start preview"}
+              </div>
             </div>
           </div>
 
@@ -566,6 +679,15 @@ export default function Page() {
           </div>
         </div>
       </section>
+          <StickyPlayer
+        activeBeat={activeBeat}
+        isPlaying={isPlaying}
+        currentTime={currentTime}
+        duration={duration}
+        onTogglePlay={handleTogglePlay}
+        onClose={handleClosePlayer}
+        onSeek={handleSeek}
+      />
     </main>
   );
 }
@@ -1134,5 +1256,132 @@ const styles = {
   smallMuted: {
     color: '#a1a1aa',
     fontSize: 13,
+  },
+  playerBarWrap: {
+    position: 'fixed',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    padding: '12px 12px 16px',
+    background: 'linear-gradient(180deg, rgba(7,7,7,0), rgba(7,7,7,0.85) 35%, rgba(7,7,7,0.98) 100%)',
+  },
+  playerBar: {
+    maxWidth: 1200,
+    margin: '0 auto',
+    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'rgba(10,10,10,0.95)',
+    borderRadius: 22,
+    padding: 14,
+    display: 'grid',
+    gridTemplateColumns: 'minmax(220px, 1fr) minmax(260px, 1.4fr) auto',
+    gap: 16,
+    alignItems: 'center',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.45)',
+  },
+  playerMeta: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    minWidth: 0,
+  },
+  playerArtWrap: {
+    width: 58,
+    height: 58,
+    borderRadius: 14,
+    overflow: 'hidden',
+    background: 'linear-gradient(135deg, #1a1a1a, #0a0a0a)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    flexShrink: 0,
+  },
+  playerArt: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    display: 'block',
+  },
+  playerLabel: {
+    color: '#71717a',
+    fontSize: 11,
+    letterSpacing: '0.2em',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  playerTitle: {
+    color: '#fff',
+    fontWeight: 800,
+    fontSize: 18,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  playerSubtitle: {
+    color: '#a1a1aa',
+    fontSize: 13,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    marginTop: 2,
+  },
+  playerCenter: {
+    minWidth: 0,
+  },
+  playerControls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  playerMainButton: {
+    width: 46,
+    height: 46,
+    borderRadius: '50%',
+    border: '1px solid rgba(255,255,255,0.12)',
+    background: '#dc2626',
+    color: '#fff',
+    fontWeight: 800,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  playerTime: {
+    color: '#d4d4d8',
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  playerProgressRow: {
+    width: '100%',
+  },
+  playerRange: {
+    width: '100%',
+    height: 8,
+    borderRadius: 999,
+    appearance: 'none',
+    outline: 'none',
+    cursor: 'pointer',
+  },
+  playerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
+  playerBadge: {
+    display: 'inline-block',
+    padding: '8px 10px',
+    borderRadius: 999,
+    background: '#18181b',
+    color: '#d4d4d8',
+    fontSize: 12,
+    border: '1px solid rgba(255,255,255,0.06)',
+  },
+  playerCloseButton: {
+    width: 38,
+    height: 38,
+    borderRadius: '50%',
+    border: '1px solid rgba(255,255,255,0.12)',
+    background: 'transparent',
+    color: '#fff',
+    cursor: 'pointer',
   },
 };
