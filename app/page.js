@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const producerImage = "/producer-photo.jpg";
 
@@ -422,60 +423,6 @@ function CartDrawer({ cartItems, isOpen, onClose, onRemove, onCheckout, total })
   );
 }
 
-function CheckoutModal({ cartItems, total, isOpen, onClose, onBackToCart }) {
-  if (!isOpen) return null;
-
-  return (
-    <div style={styles.modalOverlay}>
-      <div style={styles.checkoutCard}>
-        <div style={styles.cartHeader}>
-          <div>
-            <div style={styles.playerLabel}>Checkout</div>
-            <div style={styles.cartTitle}>Complete Your Order</div>
-          </div>
-          <button style={styles.playerCloseButton} onClick={onClose}>
-            ✕
-          </button>
-        </div>
-
-        <div style={styles.checkoutGrid}>
-          <div style={styles.checkoutForm}>
-            <input style={styles.searchInput} placeholder="Full name" />
-            <input style={styles.searchInput} placeholder="Email address" />
-            <input style={styles.searchInput} placeholder="Artist name" />
-            <input style={styles.searchInput} placeholder="Card number (demo)" />
-            <div style={styles.checkoutRow}>
-              <input style={styles.searchInput} placeholder="MM/YY" />
-              <input style={styles.searchInput} placeholder="CVC" />
-            </div>
-            <button style={styles.checkoutButton}>Pay Now (Demo)</button>
-            <button style={styles.backButton} onClick={onBackToCart}>
-              Back To Cart
-            </button>
-          </div>
-
-          <div style={styles.orderSummary}>
-            <div style={styles.playerLabel}>Order Summary</div>
-            {cartItems.map((item, index) => (
-              <div key={`${item.beat.id}-${item.license.id}-${index}`} style={styles.summaryItem}>
-                <div>
-                  <div style={styles.cartItemTitle}>{item.beat.title}</div>
-                  <div style={styles.cartItemLicense}>{item.license.name}</div>
-                </div>
-                <div style={styles.cartPrice}>${item.license.price}</div>
-              </div>
-            ))}
-            <div style={styles.cartTotalRow}>
-              <span>Total</span>
-              <strong>${total}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function Page() {
   const [search, setSearch] = useState("");
   const [mood, setMood] = useState("All");
@@ -487,10 +434,11 @@ export default function Page() {
   const [selectedBeat, setSelectedBeat] = useState(null);
   const [cartItems, setCartItems] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const audioRef = useRef(null);
+
+  const router = useRouter();
 
   useEffect(() => {
     return () => {
@@ -500,6 +448,12 @@ export default function Page() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("bigTyCart", JSON.stringify(cartItems));
+    }
+  }, [cartItems]);
 
   const filteredBeats = useMemo(() => {
     return beats.filter((beat) => {
@@ -531,17 +485,11 @@ export default function Page() {
   }
 
   function handleOpenCheckout() {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("bigTyCart", JSON.stringify(cartItems));
+    }
     setCartOpen(false);
-    setCheckoutOpen(true);
-  }
-
-  function handleCloseCheckout() {
-    setCheckoutOpen(false);
-  }
-
-  function handleBackToCart() {
-    setCheckoutOpen(false);
-    setCartOpen(true);
+    router.push("/checkout");
   }
 
   function handleTogglePlay(beat) {
@@ -934,14 +882,6 @@ export default function Page() {
         beat={selectedBeat}
         onClose={() => setSelectedBeat(null)}
         onAddToCart={handleAddToCart}
-      />
-
-      <CheckoutModal
-        cartItems={cartItems}
-        total={cartTotal}
-        isOpen={checkoutOpen}
-        onClose={handleCloseCheckout}
-        onBackToCart={handleBackToCart}
       />
     </main>
   );
