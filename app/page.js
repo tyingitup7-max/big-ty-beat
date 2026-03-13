@@ -4,6 +4,33 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const producerImage = "/producer-photo.jpg";
 
+const licenseOptions = [
+  {
+    id: "mp3",
+    name: "MP3 Lease",
+    price: 39,
+    description: "Entry license for independent artists.",
+  },
+  {
+    id: "wav",
+    name: "WAV Lease",
+    price: 69,
+    description: "Higher quality studio-ready files.",
+  },
+  {
+    id: "trackouts",
+    name: "Trackouts",
+    price: 129,
+    description: "Full stems for more control in the mix.",
+  },
+  {
+    id: "unlimited",
+    name: "Unlimited",
+    price: 199,
+    description: "Best for serious releases and broader usage.",
+  },
+];
+
 const beats = [
   {
     id: 1,
@@ -144,9 +171,27 @@ function WaveBars() {
   );
 }
 
-function BeatCard({ beat, activeBeatId, onTogglePlay, imageErrorMap, onImageError }) {
+function formatTime(seconds) {
+  if (!Number.isFinite(seconds)) return "0:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${mins}:${secs}`;
+}
+
+function BeatCard({
+  beat,
+  activeBeatId,
+  onTogglePlay,
+  imageErrorMap,
+  onImageError,
+  onOpenLicenses,
+  onQuickAdd,
+}) {
   const isPlaying = activeBeatId === beat.id;
   const showFallback = imageErrorMap[beat.id];
+  const defaultLicense = licenseOptions[0];
 
   return (
     <div style={styles.card}>
@@ -193,7 +238,14 @@ function BeatCard({ beat, activeBeatId, onTogglePlay, imageErrorMap, onImageErro
             <div style={styles.startingAt}>Starting at</div>
             <div style={styles.price}>${beat.price}</div>
           </div>
-          <button style={styles.addButton}>Add</button>
+          <div style={styles.cardActionButtons}>
+            <button style={styles.secondaryMiniButton} onClick={() => onOpenLicenses(beat)}>
+              Licenses
+            </button>
+            <button style={styles.addButton} onClick={() => onQuickAdd(beat, defaultLicense)}>
+              Add
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -208,15 +260,6 @@ function SectionTitle({ eyebrow, title, text }) {
       <p style={styles.sectionText}>{text}</p>
     </div>
   );
-}
-
-function formatTime(seconds) {
-  if (!Number.isFinite(seconds)) return "0:00";
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60)
-    .toString()
-    .padStart(2, "0");
-  return `${mins}:${secs}`;
 }
 
 function StickyPlayer({ activeBeat, isPlaying, currentTime, duration, onTogglePlay, onClose, onSeek }) {
@@ -250,7 +293,9 @@ function StickyPlayer({ activeBeat, isPlaying, currentTime, duration, onTogglePl
             <button style={styles.playerMainButton} onClick={() => onTogglePlay(activeBeat)}>
               {isPlaying ? "❚❚" : "▶"}
             </button>
-            <div style={styles.playerTime}>{formatTime(currentTime)} / {formatTime(duration)}</div>
+            <div style={styles.playerTime}>
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
           </div>
 
           <div style={styles.playerProgressRow}>
@@ -261,7 +306,10 @@ function StickyPlayer({ activeBeat, isPlaying, currentTime, duration, onTogglePl
               step="0.1"
               value={Math.min(currentTime, duration || 0)}
               onChange={(e) => onSeek(Number(e.target.value))}
-              style={{ ...styles.playerRange, background: `linear-gradient(to right, #ef4444 0%, #f97316 ${progress}%, #27272a ${progress}%, #27272a 100%)` }}
+              style={{
+                ...styles.playerRange,
+                background: `linear-gradient(to right, #ef4444 0%, #f97316 ${progress}%, #27272a ${progress}%, #27272a 100%)`,
+              }}
             />
           </div>
         </div>
@@ -269,7 +317,159 @@ function StickyPlayer({ activeBeat, isPlaying, currentTime, duration, onTogglePl
         <div style={styles.playerRight}>
           <div style={styles.playerBadge}>{activeBeat.bpm} BPM</div>
           <div style={styles.playerBadge}>{activeBeat.key}</div>
-          <button style={styles.playerCloseButton} onClick={onClose}>✕</button>
+          <button style={styles.playerCloseButton} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LicenseModal({ beat, onClose, onAddToCart }) {
+  if (!beat) return null;
+
+  return (
+    <div style={styles.modalOverlay}>
+      <div style={styles.modalCard}>
+        <div style={styles.cartHeader}>
+          <div>
+            <div style={styles.playerLabel}>License Options</div>
+            <div style={styles.cartTitle}>{beat.title}</div>
+            <div style={styles.cartItemSubtitle}>{beat.subtitle}</div>
+          </div>
+          <button style={styles.playerCloseButton} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        <div style={styles.licenseGrid}>
+          {licenseOptions.map((license) => (
+            <div key={license.id} style={styles.licenseCard}>
+              <div>
+                <div style={styles.cartItemTitle}>{license.name}</div>
+                <div style={styles.cartItemSubtitle}>{license.description}</div>
+              </div>
+              <div style={styles.licenseBottom}>
+                <div style={styles.licensePrice}>${license.price}</div>
+                <button
+                  style={styles.addButton}
+                  onClick={() => {
+                    onAddToCart(beat, license);
+                    onClose();
+                  }}
+                >
+                  Add To Cart
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CartDrawer({ cartItems, isOpen, onClose, onRemove, onCheckout, total }) {
+  if (!isOpen) return null;
+
+  return (
+    <div style={styles.cartDrawerWrap}>
+      <div style={styles.cartDrawer}>
+        <div style={styles.cartHeader}>
+          <div>
+            <div style={styles.playerLabel}>Cart</div>
+            <div style={styles.cartTitle}>Checkout Queue</div>
+          </div>
+          <button style={styles.playerCloseButton} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        <div style={styles.cartList}>
+          {cartItems.length === 0 ? (
+            <div style={styles.emptyCart}>Your cart is empty.</div>
+          ) : (
+            cartItems.map((item, index) => (
+              <div key={`${item.beat.id}-${item.license.id}-${index}`} style={styles.cartItem}>
+                <div>
+                  <div style={styles.cartItemTitle}>{item.beat.title}</div>
+                  <div style={styles.cartItemSubtitle}>{item.beat.subtitle}</div>
+                  <div style={styles.cartItemLicense}>{item.license.name}</div>
+                </div>
+                <div style={styles.cartItemRight}>
+                  <div style={styles.cartPrice}>${item.license.price}</div>
+                  <button style={styles.removeButton} onClick={() => onRemove(index)}>
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div style={styles.cartFooter}>
+          <div style={styles.cartTotalRow}>
+            <span>Total</span>
+            <strong>${total}</strong>
+          </div>
+          <button style={styles.checkoutButton} onClick={onCheckout} disabled={!cartItems.length}>
+            Proceed To Checkout
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CheckoutModal({ cartItems, total, isOpen, onClose, onBackToCart }) {
+  if (!isOpen) return null;
+
+  return (
+    <div style={styles.modalOverlay}>
+      <div style={styles.checkoutCard}>
+        <div style={styles.cartHeader}>
+          <div>
+            <div style={styles.playerLabel}>Checkout</div>
+            <div style={styles.cartTitle}>Complete Your Order</div>
+          </div>
+          <button style={styles.playerCloseButton} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        <div style={styles.checkoutGrid}>
+          <div style={styles.checkoutForm}>
+            <input style={styles.searchInput} placeholder="Full name" />
+            <input style={styles.searchInput} placeholder="Email address" />
+            <input style={styles.searchInput} placeholder="Artist name" />
+            <input style={styles.searchInput} placeholder="Card number (demo)" />
+            <div style={styles.checkoutRow}>
+              <input style={styles.searchInput} placeholder="MM/YY" />
+              <input style={styles.searchInput} placeholder="CVC" />
+            </div>
+            <button style={styles.checkoutButton}>Pay Now (Demo)</button>
+            <button style={styles.backButton} onClick={onBackToCart}>
+              Back To Cart
+            </button>
+          </div>
+
+          <div style={styles.orderSummary}>
+            <div style={styles.playerLabel}>Order Summary</div>
+            {cartItems.map((item, index) => (
+              <div key={`${item.beat.id}-${item.license.id}-${index}`} style={styles.summaryItem}>
+                <div>
+                  <div style={styles.cartItemTitle}>{item.beat.title}</div>
+                  <div style={styles.cartItemLicense}>{item.license.name}</div>
+                </div>
+                <div style={styles.cartPrice}>${item.license.price}</div>
+              </div>
+            ))}
+            <div style={styles.cartTotalRow}>
+              <span>Total</span>
+              <strong>${total}</strong>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -284,6 +484,10 @@ export default function Page() {
   const [heroImageError, setHeroImageError] = useState(false);
   const [aboutImageError, setAboutImageError] = useState(false);
   const [imageErrorMap, setImageErrorMap] = useState({});
+  const [selectedBeat, setSelectedBeat] = useState(null);
+  const [cartItems, setCartItems] = useState([]);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const audioRef = useRef(null);
@@ -307,13 +511,37 @@ export default function Page() {
   }, [search, mood]);
 
   const painBeats = beats.filter((beat) => beat.mood === "Pain");
-  const activeBeat = beats.find((beat) => beat.id === activeBeatId) || null;
-  const isPlaying = !!audioRef.current && !audioRef.current.paused && activeBeatId !== null;
   const victoryBeats = beats.filter((beat) => beat.mood === "Victory");
   const exclusiveBeats = beats.filter((beat) => beat.exclusive).slice(0, 3);
+  const activeBeat = beats.find((beat) => beat.id === activeBeatId) || null;
+  const isPlaying = !!audioRef.current && !audioRef.current.paused && activeBeatId !== null;
+  const cartTotal = cartItems.reduce((sum, item) => sum + item.license.price, 0);
 
   function onImageError(id) {
     setImageErrorMap((prev) => ({ ...prev, [id]: true }));
+  }
+
+  function handleAddToCart(beat, license) {
+    setCartItems((prev) => [...prev, { beat, license }]);
+    setCartOpen(true);
+  }
+
+  function handleRemoveFromCart(index) {
+    setCartItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleOpenCheckout() {
+    setCartOpen(false);
+    setCheckoutOpen(true);
+  }
+
+  function handleCloseCheckout() {
+    setCheckoutOpen(false);
+  }
+
+  function handleBackToCart() {
+    setCheckoutOpen(false);
+    setCartOpen(true);
   }
 
   function handleTogglePlay(beat) {
@@ -400,7 +628,12 @@ export default function Page() {
             <div style={styles.navSmall}>UNDERGROUND ELITE</div>
             <div style={styles.logo}>BIG TY BEATS</div>
           </div>
-          <button style={styles.navButton}>Enter The Sound</button>
+          <div style={styles.navActions}>
+            <button style={styles.cartNavButton} onClick={() => setCartOpen(true)}>
+              Cart ({cartItems.length})
+            </button>
+            <button style={styles.navButton}>Enter The Sound</button>
+          </div>
         </div>
 
         <div style={styles.heroGrid}>
@@ -410,8 +643,7 @@ export default function Page() {
               Underground cinematic production for artists building legacy.
             </h1>
             <p style={styles.heroText}>
-              Premium beat store concept for rappers and melodic artists who want
-              real emotion, pressure, and breakthrough records.
+              Premium beat store concept for rappers and melodic artists who want real emotion, pressure, and breakthrough records.
             </p>
 
             <div style={styles.heroButtons}>
@@ -448,9 +680,7 @@ export default function Page() {
                   onError={() => setHeroImageError(true)}
                 />
               ) : (
-                <div style={styles.heroImagePlaceholder}>
-                  ADD YOUR PHOTO AS public/producer-photo.jpg
-                </div>
+                <div style={styles.heroImagePlaceholder}>ADD YOUR PHOTO AS public/producer-photo.jpg</div>
               )}
               <WaveBars />
             </div>
@@ -473,6 +703,8 @@ export default function Page() {
               onTogglePlay={handleTogglePlay}
               imageErrorMap={imageErrorMap}
               onImageError={onImageError}
+              onOpenLicenses={setSelectedBeat}
+              onQuickAdd={handleAddToCart}
             />
           ))}
         </div>
@@ -494,7 +726,7 @@ export default function Page() {
           />
 
           <div style={styles.moodButtons}>
-            {['All', 'Pain', 'Victory'].map((item) => (
+            {["All", "Pain", "Victory"].map((item) => (
               <button
                 key={item}
                 onClick={() => setMood(item)}
@@ -518,6 +750,8 @@ export default function Page() {
               onTogglePlay={handleTogglePlay}
               imageErrorMap={imageErrorMap}
               onImageError={onImageError}
+              onOpenLicenses={setSelectedBeat}
+              onQuickAdd={handleAddToCart}
             />
           ))}
         </div>
@@ -539,6 +773,8 @@ export default function Page() {
                 onTogglePlay={handleTogglePlay}
                 imageErrorMap={imageErrorMap}
                 onImageError={onImageError}
+                onOpenLicenses={setSelectedBeat}
+                onQuickAdd={handleAddToCart}
               />
             ))}
           </div>
@@ -559,6 +795,8 @@ export default function Page() {
                 onTogglePlay={handleTogglePlay}
                 imageErrorMap={imageErrorMap}
                 onImageError={onImageError}
+                onOpenLicenses={setSelectedBeat}
+                onQuickAdd={handleAddToCart}
               />
             ))}
           </div>
@@ -581,7 +819,7 @@ export default function Page() {
                   <div>
                     <div style={styles.cardTitle}>{beat.title}</div>
                     <div style={styles.cardSubtitle}>{beat.subtitle}</div>
-                    <p style={{ ...styles.sectionText, marginTop: 12, textAlign: 'left' }}>
+                    <p style={{ ...styles.sectionText, marginTop: 12, textAlign: "left" }}>
                       Own the sound that defines your breakthrough moment.
                     </p>
                   </div>
@@ -623,16 +861,12 @@ export default function Page() {
             <div key={bundle.name} style={styles.bundleCard}>
               <div style={styles.infoBadge}>{bundle.beats} Beats</div>
               <h3 style={{ ...styles.cardTitle, marginTop: 18 }}>{bundle.name}</h3>
-              <p style={{ ...styles.sectionText, textAlign: 'left', marginTop: 14 }}>
-                {bundle.text}
-              </p>
+              <p style={{ ...styles.sectionText, textAlign: "left", marginTop: 14 }}>{bundle.text}</p>
               <div style={{ marginTop: 28 }}>
                 <div style={styles.startingAt}>Bundle Price</div>
                 <div style={styles.bundlePrice}>${bundle.price}</div>
               </div>
-              <button style={{ ...styles.primaryButton, width: '100%', marginTop: 20 }}>
-                Get Bundle
-              </button>
+              <button style={{ ...styles.primaryButton, width: "100%", marginTop: 20 }}>Get Bundle</button>
             </div>
           ))}
         </div>
@@ -653,13 +887,10 @@ export default function Page() {
 
           <div>
             <div style={styles.eyebrow}>PRODUCER STORY</div>
-            <h2 style={styles.sectionTitle}>
-              Built in FL Studio. Directed by pain, pressure, and purpose.
-            </h2>
-            <p style={{ ...styles.sectionText, textAlign: 'left', maxWidth: 700 }}>
-              BIG TY BEATS creates underground cinematic production for rappers and
-              melodic artists with real stories. The sound is built for pain
-              records, pressure records, and victory records that feel timeless.
+            <h2 style={styles.sectionTitle}>Built in FL Studio. Directed by pain, pressure, and purpose.</h2>
+            <p style={{ ...styles.sectionText, textAlign: "left", maxWidth: 700 }}>
+              BIG TY BEATS creates underground cinematic production for rappers and melodic artists with real stories.
+              The sound is built for pain records, pressure records, and victory records that feel timeless.
             </p>
 
             <div style={styles.statsGrid}>
@@ -679,7 +910,8 @@ export default function Page() {
           </div>
         </div>
       </section>
-          <StickyPlayer
+
+      <StickyPlayer
         activeBeat={activeBeat}
         isPlaying={isPlaying}
         currentTime={currentTime}
@@ -688,103 +920,141 @@ export default function Page() {
         onClose={handleClosePlayer}
         onSeek={handleSeek}
       />
+
+      <CartDrawer
+        cartItems={cartItems}
+        isOpen={cartOpen}
+        onClose={() => setCartOpen(false)}
+        onRemove={handleRemoveFromCart}
+        onCheckout={handleOpenCheckout}
+        total={cartTotal}
+      />
+
+      <LicenseModal
+        beat={selectedBeat}
+        onClose={() => setSelectedBeat(null)}
+        onAddToCart={handleAddToCart}
+      />
+
+      <CheckoutModal
+        cartItems={cartItems}
+        total={cartTotal}
+        isOpen={checkoutOpen}
+        onClose={handleCloseCheckout}
+        onBackToCart={handleBackToCart}
+      />
     </main>
   );
 }
 
 const styles = {
   page: {
-    minHeight: '100vh',
-    background: '#070707',
-    color: '#e4e4e7',
-    fontFamily: 'Arial, Helvetica, sans-serif',
+    minHeight: "100vh",
+    background: "#070707",
+    color: "#e4e4e7",
+    fontFamily: "Arial, Helvetica, sans-serif",
   },
 
   nav: {
     maxWidth: 1200,
-    margin: '0 auto',
-    padding: '24px 20px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    margin: "0 auto",
+    padding: "24px 20px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
     gap: 16,
   },
   navSmall: {
     fontSize: 11,
-    color: '#a1a1aa',
-    letterSpacing: '0.35em',
+    color: "#a1a1aa",
+    letterSpacing: "0.35em",
     marginBottom: 6,
   },
   logo: {
     fontSize: 24,
     fontWeight: 800,
-    color: '#fff',
-    letterSpacing: '0.22em',
+    color: "#fff",
+    letterSpacing: "0.22em",
+  },
+  navActions: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
   },
   navButton: {
-    background: '#dc2626',
-    color: '#fff',
-    border: 'none',
+    background: "#dc2626",
+    color: "#fff",
+    border: "none",
     borderRadius: 12,
-    padding: '12px 18px',
+    padding: "12px 18px",
     fontWeight: 700,
-    cursor: 'pointer',
+    cursor: "pointer",
+  },
+  cartNavButton: {
+    background: "transparent",
+    color: "#fff",
+    border: "1px solid rgba(255,255,255,0.14)",
+    borderRadius: 12,
+    padding: "12px 18px",
+    fontWeight: 700,
+    cursor: "pointer",
   },
 
   hero: {
-    position: 'relative',
-    overflow: 'hidden',
-    borderBottom: '1px solid rgba(255,255,255,0.06)',
+    position: "relative",
+    overflow: "hidden",
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
     background:
-      'radial-gradient(circle at top, rgba(185,28,28,0.18), transparent 30%), radial-gradient(circle at bottom right, rgba(249,115,22,0.12), transparent 25%), #070707',
+      "radial-gradient(circle at top, rgba(185,28,28,0.18), transparent 30%), radial-gradient(circle at bottom right, rgba(249,115,22,0.12), transparent 25%), #070707",
   },
   heroGlowOne: {
-    position: 'absolute',
+    position: "absolute",
     width: 400,
     height: 400,
-    background: 'rgba(220,38,38,0.16)',
-    filter: 'blur(90px)',
-    borderRadius: '50%',
+    background: "rgba(220,38,38,0.16)",
+    filter: "blur(90px)",
+    borderRadius: "50%",
     top: -100,
     right: -100,
   },
   heroGlowTwo: {
-    position: 'absolute',
+    position: "absolute",
     width: 300,
     height: 300,
-    background: 'rgba(249,115,22,0.10)',
-    filter: 'blur(90px)',
-    borderRadius: '50%',
+    background: "rgba(249,115,22,0.10)",
+    filter: "blur(90px)",
+    borderRadius: "50%",
     bottom: -80,
     left: -80,
   },
   heroGrid: {
     maxWidth: 1200,
-    margin: '0 auto',
-    padding: '40px 20px 90px',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    margin: "0 auto",
+    padding: "40px 20px 90px",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
     gap: 40,
-    alignItems: 'center',
-    position: 'relative',
+    alignItems: "center",
+    position: "relative",
     zIndex: 1,
   },
   heroPill: {
-    display: 'inline-block',
-    padding: '10px 16px',
+    display: "inline-block",
+    padding: "10px 16px",
     borderRadius: 999,
-    border: '1px solid rgba(255,255,255,0.1)',
-    background: 'rgba(255,255,255,0.04)',
+    border: "1px solid rgba(255,255,255,0.1)",
+    background: "rgba(255,255,255,0.04)",
     fontSize: 12,
-    color: '#d4d4d8',
-    letterSpacing: '0.24em',
+    color: "#d4d4d8",
+    letterSpacing: "0.24em",
     marginBottom: 20,
   },
   heroTitle: {
-    fontSize: 'clamp(42px, 7vw, 76px)',
+    fontSize: "clamp(42px, 7vw, 76px)",
     lineHeight: 1,
-    color: '#fff',
+    color: "#fff",
     fontWeight: 900,
     margin: 0,
     maxWidth: 760,
@@ -793,400 +1063,416 @@ const styles = {
     marginTop: 24,
     fontSize: 20,
     lineHeight: 1.7,
-    color: '#a1a1aa',
+    color: "#a1a1aa",
     maxWidth: 620,
   },
   heroButtons: {
-    display: 'flex',
-    flexWrap: 'wrap',
+    display: "flex",
+    flexWrap: "wrap",
     gap: 14,
     marginTop: 28,
   },
   trustRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
+    display: "flex",
+    flexWrap: "wrap",
     gap: 24,
     marginTop: 24,
-    color: '#71717a',
+    color: "#71717a",
     fontSize: 14,
   },
   nowPlayingBox: {
     marginTop: 24,
     padding: 16,
     borderRadius: 18,
-    border: '1px solid rgba(255,255,255,0.08)',
-    background: 'rgba(0,0,0,0.3)',
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(0,0,0,0.3)",
     maxWidth: 480,
   },
   nowPlayingTitle: {
-    color: '#fff',
+    color: "#fff",
     fontWeight: 700,
     marginTop: 6,
   },
   primaryButton: {
-    background: '#ffffff',
-    color: '#000000',
-    border: 'none',
+    background: "#ffffff",
+    color: "#000000",
+    border: "none",
     borderRadius: 14,
-    padding: '14px 22px',
+    padding: "14px 22px",
     fontWeight: 800,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   secondaryButton: {
-    background: 'transparent',
-    color: '#ffffff',
-    border: '1px solid #3f3f46',
+    background: "transparent",
+    color: "#ffffff",
+    border: "1px solid #3f3f46",
     borderRadius: 14,
-    padding: '14px 22px',
+    padding: "14px 22px",
     fontWeight: 800,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   goldButton: {
-    width: '100%',
-    background: '#fbbf24',
-    color: '#000',
-    border: 'none',
+    width: "100%",
+    background: "#fbbf24",
+    color: "#000",
+    border: "none",
     borderRadius: 14,
-    padding: '14px 18px',
+    padding: "14px 18px",
     fontWeight: 800,
-    cursor: 'pointer',
+    cursor: "pointer",
     marginTop: 18,
   },
 
   heroImageBox: {
     borderRadius: 32,
     padding: 12,
-    border: '1px solid rgba(255,255,255,0.08)',
-    background: 'linear-gradient(135deg, #121212, #090909)',
-    boxShadow: '0 30px 80px rgba(60,0,0,0.35)',
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "linear-gradient(135deg, #121212, #090909)",
+    boxShadow: "0 30px 80px rgba(60,0,0,0.35)",
   },
   heroImageInner: {
     borderRadius: 24,
     padding: 20,
-    border: '1px solid rgba(255,255,255,0.08)',
-    background: 'rgba(0,0,0,0.34)',
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(0,0,0,0.34)",
   },
   heroImageLabelRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
+    display: "flex",
+    justifyContent: "space-between",
     gap: 12,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     marginBottom: 16,
   },
   heroImagePlaceholder: {
     minHeight: 380,
     borderRadius: 24,
-    border: '1px solid rgba(255,255,255,0.08)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    textAlign: 'center',
+    border: "1px solid rgba(255,255,255,0.08)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
     padding: 20,
-    color: '#a1a1aa',
-    background: 'linear-gradient(145deg, #1a1a1a, #0d0d0d)',
+    color: "#a1a1aa",
+    background: "linear-gradient(145deg, #1a1a1a, #0d0d0d)",
     marginBottom: 18,
     fontWeight: 700,
   },
   heroRealImage: {
-    width: '100%',
+    width: "100%",
     height: 420,
-    objectFit: 'cover',
+    objectFit: "cover",
     borderRadius: 24,
-    border: '1px solid rgba(255,255,255,0.08)',
+    border: "1px solid rgba(255,255,255,0.08)",
     marginBottom: 18,
-    display: 'block',
+    display: "block",
   },
 
   section: {
     maxWidth: 1200,
-    margin: '0 auto',
-    padding: '90px 20px',
+    margin: "0 auto",
+    padding: "90px 20px",
   },
   sectionDark: {
-    padding: '90px 20px',
-    background: 'rgba(10,10,10,0.92)',
-    borderTop: '1px solid rgba(255,255,255,0.06)',
-    borderBottom: '1px solid rgba(255,255,255,0.06)',
+    padding: "90px 20px",
+    background: "rgba(10,10,10,0.92)",
+    borderTop: "1px solid rgba(255,255,255,0.06)",
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
   },
   sectionTwoCol: {
     maxWidth: 1200,
-    margin: '0 auto',
-    padding: '90px 20px',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    margin: "0 auto",
+    padding: "90px 20px",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
     gap: 50,
   },
   sectionTitleWrap: {
     maxWidth: 760,
-    margin: '0 auto 42px',
-    textAlign: 'center',
+    margin: "0 auto 42px",
+    textAlign: "center",
   },
   eyebrow: {
     fontSize: 12,
-    color: '#f87171',
-    letterSpacing: '0.4em',
+    color: "#f87171",
+    letterSpacing: "0.4em",
     marginBottom: 14,
   },
   sectionTitle: {
     margin: 0,
-    fontSize: 'clamp(30px, 4vw, 56px)',
-    color: '#fff',
+    fontSize: "clamp(30px, 4vw, 56px)",
+    color: "#fff",
     lineHeight: 1.1,
     fontWeight: 900,
   },
   sectionText: {
-    color: '#a1a1aa',
+    color: "#a1a1aa",
     fontSize: 17,
     lineHeight: 1.8,
     marginTop: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   grid2: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
     gap: 22,
   },
   grid3: {
     maxWidth: 1200,
-    margin: '0 auto',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+    margin: "0 auto",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
     gap: 24,
   },
   grid4: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: 24,
   },
 
   filterBox: {
     maxWidth: 1200,
-    margin: '0 auto 34px',
+    margin: "0 auto 34px",
     padding: 20,
     borderRadius: 24,
-    border: '1px solid rgba(255,255,255,0.08)',
-    background: 'rgba(0,0,0,0.35)',
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(0,0,0,0.35)",
   },
   searchInput: {
-    width: '100%',
-    padding: '14px 16px',
+    width: "100%",
+    padding: "14px 16px",
     borderRadius: 14,
-    border: '1px solid #27272a',
-    background: '#09090b',
-    color: '#fff',
-    outline: 'none',
+    border: "1px solid #27272a",
+    background: "#09090b",
+    color: "#fff",
+    outline: "none",
     fontSize: 16,
     marginBottom: 16,
+    boxSizing: "border-box",
   },
   moodButtons: {
-    display: 'flex',
+    display: "flex",
     gap: 10,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   moodButton: {
-    padding: '10px 16px',
+    padding: "10px 16px",
     borderRadius: 12,
-    border: '1px solid #27272a',
-    background: '#18181b',
-    color: '#d4d4d8',
-    cursor: 'pointer',
+    border: "1px solid #27272a",
+    background: "#18181b",
+    color: "#d4d4d8",
+    cursor: "pointer",
     fontWeight: 700,
   },
   moodButtonActive: {
-    background: '#dc2626',
-    borderColor: '#dc2626',
-    color: '#fff',
+    background: "#dc2626",
+    borderColor: "#dc2626",
+    color: "#fff",
   },
 
   card: {
     borderRadius: 24,
-    overflow: 'hidden',
-    border: '1px solid rgba(255,255,255,0.08)',
-    background: 'rgba(10,10,10,0.82)',
+    overflow: "hidden",
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(10,10,10,0.82)",
   },
   cardImage: {
-    position: 'relative',
-    aspectRatio: '1 / 1',
+    position: "relative",
+    aspectRatio: "1 / 1",
     background:
-      'radial-gradient(circle at top, rgba(239,68,68,0.28), transparent 42%), linear-gradient(135deg, #1a1a1a, #0a0a0a)',
+      "radial-gradient(circle at top, rgba(239,68,68,0.28), transparent 42%), linear-gradient(135deg, #1a1a1a, #0a0a0a)",
   },
   cardRealImage: {
-    position: 'absolute',
+    position: "absolute",
     inset: 0,
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
   },
   cardFallbackImage: {
-    position: 'absolute',
+    position: "absolute",
     inset: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#a1a1aa',
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#a1a1aa",
     fontWeight: 700,
-    textAlign: 'center',
+    textAlign: "center",
     padding: 20,
   },
   cardOverlay: {
-    position: 'absolute',
+    position: "absolute",
     inset: 0,
-    background: 'linear-gradient(180deg, transparent, rgba(0,0,0,0.58))',
+    background: "linear-gradient(180deg, transparent, rgba(0,0,0,0.58))",
   },
   cardTopRow: {
-    position: 'absolute',
+    position: "absolute",
     top: 12,
     left: 12,
     right: 12,
-    display: 'flex',
-    justifyContent: 'space-between',
+    display: "flex",
+    justifyContent: "space-between",
     gap: 8,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   cardBottom: {
-    position: 'absolute',
+    position: "absolute",
     left: 16,
     right: 16,
     bottom: 16,
-    display: 'flex',
-    alignItems: 'end',
-    justifyContent: 'space-between',
+    display: "flex",
+    alignItems: "end",
+    justifyContent: "space-between",
     gap: 12,
   },
   cardTitle: {
     fontSize: 24,
-    color: '#fff',
+    color: "#fff",
     fontWeight: 800,
     lineHeight: 1.1,
   },
   cardSubtitle: {
     marginTop: 6,
-    color: '#a1a1aa',
+    color: "#a1a1aa",
     fontSize: 14,
   },
   playButton: {
     width: 46,
     height: 46,
-    borderRadius: '50%',
-    border: '1px solid rgba(255,255,255,0.15)',
-    background: 'rgba(255,255,255,0.08)',
-    color: '#fff',
-    cursor: 'pointer',
+    borderRadius: "50%",
+    border: "1px solid rgba(255,255,255,0.15)",
+    background: "rgba(255,255,255,0.08)",
+    color: "#fff",
+    cursor: "pointer",
     fontSize: 16,
   },
   cardContent: {
     padding: 18,
   },
   badgeRow: {
-    display: 'flex',
+    display: "flex",
     gap: 8,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     marginTop: 16,
   },
   tag: {
-    display: 'inline-block',
-    padding: '6px 10px',
+    display: "inline-block",
+    padding: "6px 10px",
     borderRadius: 999,
-    background: '#dc2626',
-    color: '#fff',
+    background: "#dc2626",
+    color: "#fff",
     fontSize: 12,
     fontWeight: 700,
   },
   exclusiveTag: {
-    display: 'inline-block',
-    padding: '6px 10px',
+    display: "inline-block",
+    padding: "6px 10px",
     borderRadius: 999,
-    border: '1px solid rgba(251,191,36,0.25)',
-    background: 'rgba(251,191,36,0.10)',
-    color: '#fcd34d',
+    border: "1px solid rgba(251,191,36,0.25)",
+    background: "rgba(251,191,36,0.10)",
+    color: "#fcd34d",
     fontSize: 12,
     fontWeight: 700,
   },
   infoBadge: {
-    display: 'inline-block',
-    padding: '7px 10px',
+    display: "inline-block",
+    padding: "7px 10px",
     borderRadius: 999,
-    background: '#18181b',
-    color: '#d4d4d8',
+    background: "#18181b",
+    color: "#d4d4d8",
     fontSize: 12,
-    border: '1px solid rgba(255,255,255,0.06)',
+    border: "1px solid rgba(255,255,255,0.06)",
   },
   goldBadge: {
-    display: 'inline-block',
-    padding: '7px 10px',
+    display: "inline-block",
+    padding: "7px 10px",
     borderRadius: 999,
-    background: 'rgba(251,191,36,0.10)',
-    color: '#fcd34d',
+    background: "rgba(251,191,36,0.10)",
+    color: "#fcd34d",
     fontSize: 12,
-    border: '1px solid rgba(251,191,36,0.25)',
+    border: "1px solid rgba(251,191,36,0.25)",
     fontWeight: 700,
   },
   startingAt: {
     fontSize: 11,
-    letterSpacing: '0.22em',
-    textTransform: 'uppercase',
-    color: '#71717a',
+    letterSpacing: "0.22em",
+    textTransform: "uppercase",
+    color: "#71717a",
     marginBottom: 4,
   },
   priceRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'end',
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "end",
     gap: 12,
     marginTop: 18,
   },
   price: {
     fontSize: 30,
     fontWeight: 900,
-    color: '#fff',
+    color: "#fff",
+  },
+  cardActionButtons: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  secondaryMiniButton: {
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 12,
+    background: "transparent",
+    color: "#fff",
+    padding: "12px 14px",
+    fontWeight: 700,
+    cursor: "pointer",
   },
   addButton: {
-    border: 'none',
+    border: "none",
     borderRadius: 12,
-    background: '#fff',
-    color: '#000',
-    padding: '12px 18px',
+    background: "#fff",
+    color: "#000",
+    padding: "12px 18px",
     fontWeight: 800,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
 
   exclusiveCard: {
     borderRadius: 24,
-    overflow: 'hidden',
-    border: '1px solid rgba(251,191,36,0.18)',
-    background: 'rgba(10,10,10,0.82)',
+    overflow: "hidden",
+    border: "1px solid rgba(251,191,36,0.18)",
+    background: "rgba(10,10,10,0.82)",
   },
   exclusiveImage: {
-    aspectRatio: '4 / 3',
+    aspectRatio: "4 / 3",
     padding: 16,
     background:
-      'radial-gradient(circle at top, rgba(251,191,36,0.15), transparent 25%), linear-gradient(135deg, #171717, #0a0a0a)',
+      "radial-gradient(circle at top, rgba(251,191,36,0.15), transparent 25%), linear-gradient(135deg, #171717, #0a0a0a)",
   },
   exclusiveImageInner: {
-    height: '100%',
+    height: "100%",
     borderRadius: 22,
-    border: '1px solid rgba(255,255,255,0.08)',
-    background: 'rgba(0,0,0,0.3)',
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(0,0,0,0.3)",
     padding: 18,
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
   },
   exclusivePrices: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 1fr)",
     gap: 10,
   },
   exclusivePriceBox: {
     borderRadius: 18,
-    border: '1px solid rgba(255,255,255,0.08)',
-    background: 'rgba(0,0,0,0.3)',
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(0,0,0,0.3)",
     padding: 14,
-    textAlign: 'center',
+    textAlign: "center",
   },
   exclusivePrice: {
-    color: '#fff',
+    color: "#fff",
     fontWeight: 900,
     fontSize: 22,
     marginTop: 6,
@@ -1194,94 +1480,95 @@ const styles = {
 
   bundleCard: {
     borderRadius: 24,
-    border: '1px solid rgba(255,255,255,0.08)',
-    background: 'rgba(10,10,10,0.82)',
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(10,10,10,0.82)",
     padding: 24,
   },
   bundlePrice: {
     fontSize: 42,
     fontWeight: 900,
-    color: '#fff',
+    color: "#fff",
     marginTop: 6,
   },
 
   aboutGrid: {
     maxWidth: 1200,
-    margin: '0 auto',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    margin: "0 auto",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
     gap: 40,
-    alignItems: 'center',
+    alignItems: "center",
   },
   aboutImage: {
     minHeight: 520,
     borderRadius: 28,
-    border: '1px solid rgba(255,255,255,0.08)',
+    border: "1px solid rgba(255,255,255,0.08)",
     background:
-      'radial-gradient(circle at top, rgba(239,68,68,0.16), transparent 26%), linear-gradient(150deg, #1b1b1b, #0d0d0d)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+      "radial-gradient(circle at top, rgba(239,68,68,0.16), transparent 26%), linear-gradient(150deg, #1b1b1b, #0d0d0d)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 20,
-    textAlign: 'center',
-    color: '#a1a1aa',
+    textAlign: "center",
+    color: "#a1a1aa",
     fontWeight: 700,
   },
   aboutRealImage: {
-    width: '100%',
+    width: "100%",
     minHeight: 520,
-    objectFit: 'cover',
+    objectFit: "cover",
     borderRadius: 28,
-    border: '1px solid rgba(255,255,255,0.08)',
-    display: 'block',
+    border: "1px solid rgba(255,255,255,0.08)",
+    display: "block",
   },
   statsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
     gap: 16,
     marginTop: 26,
   },
   statCard: {
     borderRadius: 22,
-    border: '1px solid rgba(255,255,255,0.08)',
-    background: 'rgba(0,0,0,0.3)',
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(0,0,0,0.3)",
     padding: 18,
   },
   statNumber: {
-    color: '#fff',
+    color: "#fff",
     fontWeight: 900,
     fontSize: 22,
     marginBottom: 8,
   },
   smallMuted: {
-    color: '#a1a1aa',
+    color: "#a1a1aa",
     fontSize: 13,
   },
+
   playerBarWrap: {
-    position: 'fixed',
+    position: "fixed",
     left: 0,
     right: 0,
     bottom: 0,
     zIndex: 1000,
-    padding: '12px 12px 16px',
-    background: 'linear-gradient(180deg, rgba(7,7,7,0), rgba(7,7,7,0.85) 35%, rgba(7,7,7,0.98) 100%)',
+    padding: "12px 12px 16px",
+    background: "linear-gradient(180deg, rgba(7,7,7,0), rgba(7,7,7,0.85) 35%, rgba(7,7,7,0.98) 100%)",
   },
   playerBar: {
     maxWidth: 1200,
-    margin: '0 auto',
-    border: '1px solid rgba(255,255,255,0.08)',
-    background: 'rgba(10,10,10,0.95)',
+    margin: "0 auto",
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(10,10,10,0.95)",
     borderRadius: 22,
     padding: 14,
-    display: 'grid',
-    gridTemplateColumns: 'minmax(220px, 1fr) minmax(260px, 1.4fr) auto',
+    display: "grid",
+    gridTemplateColumns: "minmax(220px, 1fr) minmax(260px, 1.4fr) auto",
     gap: 16,
-    alignItems: 'center',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.45)',
+    alignItems: "center",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
   },
   playerMeta: {
-    display: 'flex',
-    alignItems: 'center',
+    display: "flex",
+    alignItems: "center",
     gap: 12,
     minWidth: 0,
   },
@@ -1289,99 +1576,304 @@ const styles = {
     width: 58,
     height: 58,
     borderRadius: 14,
-    overflow: 'hidden',
-    background: 'linear-gradient(135deg, #1a1a1a, #0a0a0a)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    overflow: "hidden",
+    background: "linear-gradient(135deg, #1a1a1a, #0a0a0a)",
+    border: "1px solid rgba(255,255,255,0.08)",
     flexShrink: 0,
   },
   playerArt: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-    display: 'block',
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
   },
   playerLabel: {
-    color: '#71717a',
+    color: "#71717a",
     fontSize: 11,
-    letterSpacing: '0.2em',
-    textTransform: 'uppercase',
+    letterSpacing: "0.2em",
+    textTransform: "uppercase",
     marginBottom: 4,
   },
   playerTitle: {
-    color: '#fff',
+    color: "#fff",
     fontWeight: 800,
     fontSize: 18,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
   playerSubtitle: {
-    color: '#a1a1aa',
+    color: "#a1a1aa",
     fontSize: 13,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
     marginTop: 2,
   },
   playerCenter: {
     minWidth: 0,
   },
   playerControls: {
-    display: 'flex',
-    alignItems: 'center',
+    display: "flex",
+    alignItems: "center",
     gap: 12,
     marginBottom: 8,
   },
   playerMainButton: {
     width: 46,
     height: 46,
-    borderRadius: '50%',
-    border: '1px solid rgba(255,255,255,0.12)',
-    background: '#dc2626',
-    color: '#fff',
+    borderRadius: "50%",
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "#dc2626",
+    color: "#fff",
     fontWeight: 800,
-    cursor: 'pointer',
+    cursor: "pointer",
     flexShrink: 0,
   },
   playerTime: {
-    color: '#d4d4d8',
+    color: "#d4d4d8",
     fontSize: 13,
     fontWeight: 700,
   },
   playerProgressRow: {
-    width: '100%',
+    width: "100%",
   },
   playerRange: {
-    width: '100%',
+    width: "100%",
     height: 8,
     borderRadius: 999,
-    appearance: 'none',
-    outline: 'none',
-    cursor: 'pointer',
+    appearance: "none",
+    outline: "none",
+    cursor: "pointer",
   },
   playerRight: {
-    display: 'flex',
-    alignItems: 'center',
+    display: "flex",
+    alignItems: "center",
     gap: 10,
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
   },
   playerBadge: {
-    display: 'inline-block',
-    padding: '8px 10px',
+    display: "inline-block",
+    padding: "8px 10px",
     borderRadius: 999,
-    background: '#18181b',
-    color: '#d4d4d8',
+    background: "#18181b",
+    color: "#d4d4d8",
     fontSize: 12,
-    border: '1px solid rgba(255,255,255,0.06)',
+    border: "1px solid rgba(255,255,255,0.06)",
   },
   playerCloseButton: {
     width: 38,
     height: 38,
-    borderRadius: '50%',
-    border: '1px solid rgba(255,255,255,0.12)',
-    background: 'transparent',
-    color: '#fff',
-    cursor: 'pointer',
+    borderRadius: "50%",
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "transparent",
+    color: "#fff",
+    cursor: "pointer",
+  },
+
+  cartDrawerWrap: {
+    position: "fixed",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: "100%",
+    maxWidth: 420,
+    zIndex: 1200,
+    padding: 16,
+    pointerEvents: "none",
+  },
+  cartDrawer: {
+    height: "100%",
+    background: "rgba(10,10,10,0.98)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 24,
+    boxShadow: "0 30px 80px rgba(0,0,0,0.5)",
+    display: "flex",
+    flexDirection: "column",
+    pointerEvents: "auto",
+  },
+  cartHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 20,
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+  },
+  cartTitle: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: 900,
+  },
+  cartList: {
+    flex: 1,
+    overflowY: "auto",
+    padding: 16,
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  emptyCart: {
+    color: "#a1a1aa",
+    textAlign: "center",
+    marginTop: 30,
+  },
+  cartItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    background: "#111113",
+    border: "1px solid rgba(255,255,255,0.06)",
+  },
+  cartItemTitle: {
+    color: "#fff",
+    fontWeight: 800,
+    fontSize: 16,
+  },
+  cartItemSubtitle: {
+    color: "#a1a1aa",
+    fontSize: 13,
+    marginTop: 4,
+  },
+  cartItemLicense: {
+    color: "#f97316",
+    fontSize: 13,
+    fontWeight: 700,
+    marginTop: 6,
+  },
+  cartItemRight: {
+    textAlign: "right",
+  },
+  cartPrice: {
+    color: "#fff",
+    fontWeight: 900,
+    fontSize: 18,
+  },
+  removeButton: {
+    marginTop: 10,
+    border: "none",
+    background: "transparent",
+    color: "#f87171",
+    cursor: "pointer",
+    fontWeight: 700,
+  },
+  cartFooter: {
+    padding: 20,
+    borderTop: "1px solid rgba(255,255,255,0.08)",
+  },
+  cartTotalRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    color: "#fff",
+    fontSize: 18,
+    marginBottom: 16,
+  },
+  checkoutButton: {
+    width: "100%",
+    background: "#ffffff",
+    color: "#000000",
+    border: "none",
+    borderRadius: 14,
+    padding: "14px 18px",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  backButton: {
+    width: "100%",
+    background: "transparent",
+    color: "#fff",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 14,
+    padding: "14px 18px",
+    fontWeight: 800,
+    cursor: "pointer",
+    marginTop: 10,
+  },
+
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.72)",
+    zIndex: 1300,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 920,
+    background: "#0b0b0d",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 28,
+    overflow: "hidden",
+  },
+  licenseGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 16,
+    padding: 20,
+  },
+  licenseCard: {
+    borderRadius: 20,
+    background: "#111113",
+    border: "1px solid rgba(255,255,255,0.06)",
+    padding: 18,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  licenseBottom: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  licensePrice: {
+    color: "#fff",
+    fontSize: 30,
+    fontWeight: 900,
+  },
+
+  checkoutCard: {
+    width: "100%",
+    maxWidth: 980,
+    background: "#0b0b0d",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 28,
+    overflow: "hidden",
+  },
+  checkoutGrid: {
+    display: "grid",
+    gridTemplateColumns: "1.2fr 0.8fr",
+    gap: 0,
+  },
+  checkoutForm: {
+    padding: 20,
+    borderRight: "1px solid rgba(255,255,255,0.08)",
+  },
+  checkoutRow: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
+  },
+  orderSummary: {
+    padding: 20,
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  summaryItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    padding: 12,
+    borderRadius: 16,
+    background: "#111113",
+    border: "1px solid rgba(255,255,255,0.06)",
   },
 };
