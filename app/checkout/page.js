@@ -64,6 +64,16 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (!process.env.NEXT_PUBLIC_SQUARE_APP_ID || process.env.NEXT_PUBLIC_SQUARE_APP_ID === 'REPLACE_WITH_APP_ID') {
+      setStatus("Please configure your Square App ID in .env.local");
+      return;
+    }
+
+    if (!process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID || process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID === 'REPLACE_WITH_LOCATION_ID') {
+      setStatus("Please configure your Square Location ID in .env.local");
+      return;
+    }
+
     try {
       setLoading(true);
       setStatus("Initializing Cash App Pay...");
