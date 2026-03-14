@@ -1,20 +1,28 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function CheckoutPage() {
+  const router = useRouter();
+
   const [cartItems, setCartItems] = useState([]);
   const [status, setStatus] = useState("Idle");
   const [loading, setLoading] = useState(false);
   const [squareReady, setSquareReady] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
     const savedCart = localStorage.getItem("bigTyCart");
     if (savedCart) {
       try {
-        setCartItems(JSON.parse(savedCart));
+        const parsed = JSON.parse(savedCart);
+        if (Array.isArray(parsed)) {
+          setCartItems(parsed);
+        }
       } catch (error) {
-        console.error("Failed to parse cart", error);
+        console.error("Failed to parse cart:", error);
       }
     }
   }, []);
@@ -23,7 +31,7 @@ export default function CheckoutPage() {
     let interval;
 
     function checkSquare() {
-      if (window.Square) {
+      if (typeof window !== "undefined" && window.Square) {
         setSquareReady(true);
         clearInterval(interval);
       }
@@ -56,16 +64,6 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!process.env.NEXT_PUBLIC_SQUARE_APP_ID || process.env.NEXT_PUBLIC_SQUARE_APP_ID === 'YOUR_SQUARE_APP_ID') {
-      setStatus("Please configure your Square App ID in .env.local");
-      return;
-    }
-
-    if (!process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID || process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID === 'YOUR_SQUARE_LOCATION_ID') {
-      setStatus("Please configure your Square Location ID in .env.local");
-      return;
-    }
-
     try {
       setLoading(true);
       setStatus("Initializing Cash App Pay...");
@@ -94,7 +92,7 @@ export default function CheckoutPage() {
       if (tokenResult.status !== "OK") {
         setLoading(false);
         setStatus("Cash App tokenization failed");
-        console.error(tokenResult);
+        console.error("Tokenization result:", tokenResult);
         return;
       }
 
@@ -120,7 +118,7 @@ export default function CheckoutPage() {
       if (!orderData.ok) {
         setLoading(false);
         setStatus("Order creation failed");
-        console.error(orderData);
+        console.error("Order error:", orderData);
         return;
       }
 
@@ -146,17 +144,29 @@ export default function CheckoutPage() {
 
       if (paymentData.ok) {
         setStatus("Payment completed");
-        localStorage.removeItem("bigTyCart");
+
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("bigTyCart");
+        }
+
         setCartItems([]);
+
+        setTimeout(() => {
+          router.push("/");
+        }, 1500);
       } else {
         setStatus("Payment failed");
-        console.error(paymentData);
+        console.error("Payment error:", paymentData);
       }
     } catch (error) {
       setLoading(false);
       setStatus("Cash App checkout failed");
-      console.error(error);
+      console.error("Checkout error:", error);
     }
+  }
+
+  function handleBackToStore() {
+    router.push("/");
   }
 
   return (
@@ -166,9 +176,9 @@ export default function CheckoutPage() {
           <div style={styles.eyebrow}>CHECKOUT</div>
           <h1 style={styles.title}>Cash App Pay</h1>
           <p style={styles.text}>
-            This page is wired for the real Square Cash App flow. When your
-            Square credentials are added, this button will tokenize payment and
-            send it to your backend routes.
+            This page is wired to your Square order and payment routes. When your
+            Square sandbox or production credentials are added, this page can run
+            the real Cash App payment flow.
           </p>
 
           <div style={styles.statusBox}>
@@ -182,15 +192,27 @@ export default function CheckoutPage() {
           </div>
 
           <button
-            style={styles.cashAppButton}
+            style={{
+              ...styles.cashAppButton,
+              opacity: !cartItems.length || loading || !squareReady ? 0.6 : 1,
+              cursor:
+                !cartItems.length || loading || !squareReady
+                  ? "not-allowed"
+                  : "pointer",
+            }}
             onClick={handleCashAppCheckout}
             disabled={!cartItems.length || loading || !squareReady}
           >
             Pay with Cash App
           </button>
 
+          <button style={styles.backButton} onClick={handleBackToStore}>
+            Back To Store
+          </button>
+
           <div style={styles.note}>
-            Add your Square sandbox credentials in <code>.env.local</code> first.
+            Make sure your <code>.env.local</code> has your Square App ID,
+            Location ID, Access Token, and environment.
           </div>
         </div>
 
@@ -306,12 +328,23 @@ const styles = {
     padding: "16px 20px",
     fontWeight: 900,
     fontSize: 16,
+    marginBottom: 12,
+  },
+  backButton: {
+    width: "100%",
+    background: "transparent",
+    color: "#fff",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 16,
+    padding: "16px 20px",
+    fontWeight: 800,
+    fontSize: 15,
     cursor: "pointer",
   },
   note: {
     color: "#a1a1aa",
     fontSize: 13,
-    marginTop: 12,
+    marginTop: 14,
     lineHeight: 1.6,
   },
   summaryCard: {
